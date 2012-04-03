@@ -19,6 +19,7 @@ class JsonWrapper
 end
 
 class Jbuilder < BlankSlate
+
   # Yields a builder and automatically turns the result into a JSON string
   def self.encode
     new._tap { |jbuilder| yield jbuilder }.target!
@@ -27,7 +28,7 @@ class Jbuilder < BlankSlate
   def self.encode_with_cache(cache_key)
     Rails.cache.fetch(cache_key) do
       new._tap { |jbuilder| yield jbuilder }.target!
-    end    
+    end
   end
 
   define_method(:__class__, find_hidden_method(:class))
@@ -113,31 +114,22 @@ class Jbuilder < BlankSlate
   #   { "people": [ { "name": David", "age": 32 }, { "name": Jamie", "age": 31 } ] }
   def array!(collection)
     @attributes = [] and return if collection.empty?
-    
-    keys = collection.select { |el| el.respond_to?(:jbuilder_cache_key) }.
-                      map    { |el| el.jbuilder_cache_key }
-
-    cached = if keys.blank? 
-      {}
-    else
-      Rails.cache.read_multi(keys)
-    end
 
     # set the maximum no of cache_writes (reduce the latency penalty we pay per attempt)
-    max_cache_writes = 50;
+    max_cache_writes = 100;
 
     collection.each do |element|
-      if element.respond_to?(:jbuilder_cache_key) 
+      if element.respond_to?(:jbuilder_cache_key)
         key = element.jbuilder_cache_key
 
-        cached_json = cached[key]
+        cached_json = Rails.cache.read(key)
 
         if cached_json.blank?
           cached_json = _new_instance._tap { |jbuilder| yield jbuilder, element }.target!
           if max_cache_writes > 0
             Rails.cache.write(key, cached_json)
-            max_cache_writes =- 1
-          end 
+            max_cache_writes -= 1
+          end
         end
 
         child_json! cached_json
