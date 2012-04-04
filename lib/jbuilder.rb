@@ -20,6 +20,8 @@ end
 
 class Jbuilder < BlankSlate
 
+  attr_accessor :cache_expires_in
+
   # Yields a builder and automatically turns the result into a JSON string
   def self.encode
     new._tap { |jbuilder| yield jbuilder }.target!
@@ -35,6 +37,7 @@ class Jbuilder < BlankSlate
   define_method(:_tap, find_hidden_method(:tap))
 
   def initialize
+    @cache_expires_in = 24.hours
     @attributes = ActiveSupport::OrderedHash.new
   end
 
@@ -127,7 +130,8 @@ class Jbuilder < BlankSlate
         if cached_json.blank?
           cached_json = _new_instance._tap { |jbuilder| yield jbuilder, element }.target!
           if max_cache_writes > 0
-            Rails.cache.write(key, cached_json)
+            # calling method reader so that it can be overriding in initializer for now..
+            Rails.cache.write(key, cached_json, :expires_in => self.cache_expires_in)
             max_cache_writes -= 1
           end
         end
